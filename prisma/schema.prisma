@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  pendiente
+  en_proceso
+  entregado
+  cancelado
+}
+
+enum PromoType {
+  PORCENTAJE
+  FIJO
+}
+
+model Role {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @unique              // 'cliente', 'administrador'
+  descripcion String?
+
+  users User[]
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  roleId     Int
+  nombre     String
+  email      String   @unique
+  password   String
+  telefono   String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  role      Role      @relation(fields: [roleId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  addresses Address[]
+  orders    Order[]
+
+  @@index([roleId])
+  @@index([email])
+}
+
+model Address {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  alias         String?
+  direccion     String
+  referencia    String?
+  distrito      String?
+  ciudad        String
+  region        String?
+  codigoPostal  String?
+  lat           Decimal? @db.Decimal(10,7)
+  lng           Decimal? @db.Decimal(10,7)
+  createdAt     DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+model PaymentMethod {
+  id     Int     @id @default(autoincrement())
+  nombre String
+  activo Boolean @default(true)
+
+  orders Order[]
+}
+
+model Category {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @unique
+  descripcion String?
+  activo      Boolean @default(true)
+  orden       Int     @default(0)  // Para ordenar en el menú
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pizzas Pizza[]
+}
+
+model Size {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  precioExtra Decimal  @db.Decimal(10,2)
+
+  orderItems OrderItem[]
+}
+
+model Ingredient {
+  id           Int       @id @default(autoincrement())
+  nombre       String    @unique
+  precioExtra  Decimal   @db.Decimal(10,2)
+  disponible   Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  pizzaLinks   PizzaIngredient[]
+  itemExtras   OrderItemIngredient[]
+}
+
+model Pizza {
+  id           Int       @id @default(autoincrement())
+  categoryId   Int?      // Clave foránea para categoría
+  nombre       String
+  slug         String    @unique
+  descripcion  String?
+  imagen       String?   // URL de la imagen de la pizza
+  precioBase   Decimal   @db.Decimal(10,2)
+  disponible   Boolean   @default(true)
+  destacada    Boolean   @default(false)  // Para pizzas populares
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  category     Category? @relation(fields: [categoryId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+  ingredients  PizzaIngredient[]
+  orderItems   OrderItem[]
+  promoLinks   PromotionPizza[]
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([destacada])
+}
+
+model PizzaIngredient {
+  // Puente pizzas <-> ingredients (composición por defecto)
+  pizzaId      Int
+  ingredientId Int
+
+  pizza      Pizza      @relation(fields: [pizzaId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+
+  @@id([pizzaId, ingredientId])
+  @@index([ingredientId])
+}
+
+model Promotion {
+  id          Int        @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  tipo        PromoType
+  valor       Decimal     @db.Decimal(10,2) // % o monto fijo según tipo
+  activo      Boolean     @default(true)
+  empiezaEl   DateTime?
+  terminaEl   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  pizzas      PromotionPizza[]
+
+  @@index([activo, empiezaEl, terminaEl])
+}
+
+model PromotionPizza {
+  // Puente promotions <-> pizzas
+  promotionId Int
+  pizzaId     Int
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  pizza     Pizza     @relation(fields: [pizzaId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+
+  @@id([promotionId, pizzaId])
+  @@index([pizzaId])
+}
+
+model Order {
+  id               Int          @id @default(autoincrement())
+  userId           Int
+  addressId        Int?
+  paymentMethodId  Int
+  status           OrderStatus   @default(pendiente)
+  subtotal         Decimal       @db.Decimal(10,2)
+  descuentoTotal   Decimal       @db.Decimal(10,2) @default(0)
+  total            Decimal       @db.Decimal(10,2)
+  tiempoEstimado   Int?          // minutos estimados de entrega
+  notas            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user           User          @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  address        Address?      @relation(fields: [addressId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+  paymentMethod  PaymentMethod @relation(fields: [paymentMethodId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  items          OrderItem[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model OrderItem {
+  id              Int      @id @default(autoincrement())
+  orderId         Int
+  pizzaId         Int
+  sizeId          Int
+  cantidad        Int
+  precioUnitario  Decimal  @db.Decimal(10,2)  // snapshot al comprar
+  descuentoItem   Decimal  @db.Decimal(10,2)  @default(0)
+  totalItem       Decimal  @db.Decimal(10,2)
+
+  order  Order @relation(fields: [orderId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  pizza  Pizza @relation(fields: [pizzaId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  size   Size  @relation(fields: [sizeId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  extras OrderItemIngredient[]
+
+  @@index([orderId])
+  @@index([pizzaId])
+  @@index([sizeId])
+}
+
+model OrderItemIngredient {
+  // Ingredientes extra por ítem (personalización cobrable)
+  orderItemId  Int
+  ingredientId Int
+  extraPrecio  Decimal @db.Decimal(10,2) @default(0)
+
+  orderItem  OrderItem  @relation(fields: [orderItemId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+
+  @@id([orderItemId, ingredientId])
+  @@index([ingredientId])
+}
