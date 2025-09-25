@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethodStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum IngredientStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+enum PizzaStatus {
+  AVAILABLE
+  UNAVAILABLE
+  SEASONAL
+}
+
+enum PromotionStatus {
+  ACTIVE
+  INACTIVE
+  SCHEDULED
+  EXPIRED
+}
+
+enum PromotionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum RoleType {
+  CUSTOMER
+  ADMIN
+  STAFF
+}
+
+model Role {
+  id          Int       @id @default(autoincrement())
+  name        RoleType  @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id         Int        @id @default(autoincrement())
+  roleId     Int
+  firstName  String
+  lastName   String
+  email      String     @unique
+  password   String
+  phone      String?
+  status     UserStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  deletedAt  DateTime?
+  role       Role       @relation(fields: [roleId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  addresses  Address[]
+  orders     Order[]
+
+  @@index([roleId])
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model Address {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  alias        String?
+  streetLine1  String
+  streetLine2  String?
+  reference    String?
+  district     String?
+  city         String
+  state        String?
+  postalCode   String?
+  latitude     Decimal?  @db.Decimal(10, 7)
+  longitude    Decimal?  @db.Decimal(10, 7)
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  user         User      @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  orders       Order[]
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model PaymentMethod {
+  id           Int                   @id @default(autoincrement())
+  name         String                @unique
+  status       PaymentMethodStatus   @default(ACTIVE)
+  displayOrder Int                   @default(0)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  deletedAt    DateTime?
+  orders       Order[]
+
+  @@index([status])
+  @@map("payment_methods")
+}
+
+model Category {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  description  String?
+  status       CategoryStatus @default(ACTIVE)
+  displayOrder Int       @default(0)
+  imageUrl     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  pizzas       Pizza[]
+
+  @@index([status, displayOrder])
+  @@map("categories")
+}
+
+model Size {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  extraCost    Decimal   @db.Decimal(10, 2) @default(0)
+  displayOrder Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  orderItems   OrderItem[]
+
+  @@index([displayOrder])
+  @@map("sizes")
+}
+
+model Ingredient {
+  id               Int              @id @default(autoincrement())
+  name             String           @unique
+  extraCost        Decimal          @db.Decimal(10, 2) @default(0)
+  status           IngredientStatus @default(AVAILABLE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+  pizzaIngredients PizzaIngredient[]
+  orderItemExtras  OrderItemExtra[]
+
+  @@index([status])
+  @@map("ingredients")
+}
+
+model Pizza {
+  id               Int               @id @default(autoincrement())
+  categoryId       Int?
+  name             String
+  slug             String            @unique
+  description      String?
+  imageUrl         String?
+  basePrice        Decimal           @db.Decimal(10, 2)
+  status           PizzaStatus       @default(AVAILABLE)
+  isFeatured       Boolean           @default(false)
+  displayOrder     Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+  category         Category?         @relation(fields: [categoryId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+  pizzaIngredients PizzaIngredient[]
+  orderItems       OrderItem[]
+  promotionPizzas  PromotionPizza[]
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isFeatured])
+  @@map("pizzas")
+}
+
+model PizzaIngredient {
+  pizzaId      Int
+  ingredientId Int
+  pizza        Pizza      @relation(fields: [pizzaId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+
+  @@id([pizzaId, ingredientId])
+  @@index([ingredientId])
+  @@map("pizza_ingredients")
+}
+
+model Promotion {
+  id          Int            @id @default(autoincrement())
+  name        String
+  description String?
+  type        PromotionType
+  value       Decimal         @db.Decimal(10, 2)
+  status      PromotionStatus @default(ACTIVE)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  promotionPizzas PromotionPizza[]
+
+  @@index([status, startsAt, endsAt])
+  @@map("promotions")
+}
+
+model PromotionPizza {
+  promotionId Int
+  pizzaId     Int
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  pizza       Pizza     @relation(fields: [pizzaId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+
+  @@id([promotionId, pizzaId])
+  @@index([pizzaId])
+  @@map("promotion_pizzas")
+}
+
+model Order {
+  id              Int        @id @default(autoincrement())
+  userId          Int
+  addressId       Int?
+  paymentMethodId Int
+  status          OrderStatus @default(PENDING)
+  subtotal        Decimal    @db.Decimal(10, 2)
+  discountTotal   Decimal    @db.Decimal(10, 2) @default(0)
+  taxAmount       Decimal    @db.Decimal(10, 2) @default(0)
+  total           Decimal    @db.Decimal(10, 2)
+  estimatedMinutes Int?
+  notes           String?
+  internalNotes   String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+  user            User       @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  address         Address?   @relation(fields: [addressId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+  paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  items           OrderItem[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  pizzaId     Int
+  sizeId      Int
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  itemDiscount Decimal @db.Decimal(10, 2) @default(0)
+  itemTotal   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  order       Order    @relation(fields: [orderId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  pizza       Pizza    @relation(fields: [pizzaId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  size        Size     @relation(fields: [sizeId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+  extras      OrderItemExtra[]
+
+  @@index([orderId])
+  @@index([pizzaId])
+  @@index([sizeId])
+  @@map("order_items")
+}
+
+model OrderItemExtra {
+  orderItemId Int
+  ingredientId Int
+  extraCost   Decimal @db.Decimal(10, 2) @default(0)
+  orderItem   OrderItem  @relation(fields: [orderItemId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  ingredient  Ingredient @relation(fields: [ingredientId], references: [id], onUpdate: Cascade, onDelete: Restrict)
+
+  @@id([orderItemId, ingredientId])
+  @@index([ingredientId])
+  @@map("order_item_extras")
+}

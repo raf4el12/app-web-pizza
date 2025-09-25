@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    // Salidas
+    "rootDir": "src",
+    "outDir": "dist",
+
+    // ESM en Node
+    "module": "CommonJS",
+    "moduleResolution": "node",
+
+    // Target moderno (Node 18+)
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    // Tipos de Node
+    "types": ["node"],
+
+    // Emit y DX
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    // Estrictos
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Interop y utilidades
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "prisma",
+    "examples",
+    "shared"
+  ]
+}
